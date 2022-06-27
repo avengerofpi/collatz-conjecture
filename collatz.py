@@ -13,11 +13,15 @@ def collatz(n):
 def count_collatz(n):
     c = 0
     nList = [n]
+    isLoop = False
     while n > 1:
         c = c+1
         n = collatz(n)
         nList.append(n)
-    return c, nList
+        if (nList.count(n) > 1):
+            isLoop = True
+            break
+    return c, nList, isLoop
 
 def modifyStart(i):
     #return (2 ** i) - 1
@@ -32,7 +36,7 @@ widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 
 for i in range(minI, maxI):
     n = modifyStart(i)
-    c, nList = count_collatz(n)
+    c, nList, isLoop = count_collatz(n)
     nListReverse = list(nList)
     nListReverse.reverse()
     print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
@@ -41,4 +45,8 @@ for i in range(minI, maxI):
     #print(f"{c:>{widthLargestStart}d} {n:>{widthLargestModifiedStart}d}")
     #print(f"{n:>30d}: {c:>15d}")
     #print(f"{n:>2d}: {c:>3d} - {nList}")
+    if (isLoop):
+        print("!! LOOP !!")
+        print(f"  {n} -> {nList}")
+        break
 
