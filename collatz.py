@@ -10,18 +10,16 @@ def collatz(n):
     else:
         return n//2
 
-def count_collatz(n):
-    c = 0
+def gen_collatz(n):
     nList = [n]
     isLoop = False
-    while n > 1:
-        c = c+1
+    while ((n > 1) and not (n in alreadySeen)):
         n = collatz(n)
         nList.append(n)
         if (nList.count(n) > 1):
             isLoop = True
             break
-    return c, nList, isLoop
+    return nList, isLoop
 
 def modifyStart(i):
     #return (2 ** i) - 1
@@ -30,16 +28,20 @@ def modifyStart(i):
 # Main method
 minI=1
 maxI=100
+
+# Help to stop early when we've seen a degenerate case before
+alreadySeen = set()
+countMap = { 1: 1 }
+nToListMap = { 1: [] }
+
+# Printing-help vars
 widthLargestStart =         int(log10(maxI)) + 1
 widthLargestCount =         int(log10(maxI)) + 2
 widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 
 for i in range(minI, maxI):
     n = modifyStart(i)
-    c, nList, isLoop = count_collatz(n)
-    nListReverse = list(nList)
-    nListReverse.reverse()
-    print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
+    nList, isLoop = gen_collatz(n)
     #print(f"  {nListReverse}")
     #print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
     #print(f"{c:>{widthLargestStart}d} {n:>{widthLargestModifiedStart}d}")
@@ -49,4 +51,15 @@ for i in range(minI, maxI):
         print("!! LOOP !!")
         print(f"  {n} -> {nList}")
         break
+
+    lastElement = nList[-1]
+    tailOffset = countMap[lastElement]
+    headCount = len(nList)
+    # Subtract 1 for the overlap between lists
+    c = headCount + tailOffset - 1
+    print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
+    for ii in range(len(nList)):
+        nn = nList[ii]
+        alreadySeen.add(nn)
+        countMap[nn] = (c - ii)
 
