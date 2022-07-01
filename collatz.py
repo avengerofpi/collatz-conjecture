@@ -22,7 +22,6 @@ def gen_collatz(n):
     return nList, isLoop
 
 def modifyStart(i):
-    #return (2 ** i) - 1
     return (2 ** i) + 1
     
 # Main method
@@ -42,11 +41,6 @@ widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 for i in range(minI, maxI):
     n = modifyStart(i)
     nList, isLoop = gen_collatz(n)
-    #print(f"  {nListReverse}")
-    #print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
-    #print(f"{c:>{widthLargestStart}d} {n:>{widthLargestModifiedStart}d}")
-    #print(f"{n:>30d}: {c:>15d}")
-    #print(f"{n:>2d}: {c:>3d} - {nList}")
     if (isLoop):
         print("!! LOOP !!")
         print(f"  {n} -> {nList}")
