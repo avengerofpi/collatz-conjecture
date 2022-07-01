@@ -47,13 +47,18 @@ for i in range(minI, maxI):
         break
 
     lastElement = nList[-1]
-    tailOffset = countMap[lastElement]
-    headCount = len(nList)
     # Subtract 1 for the overlap between lists
-    c = headCount + tailOffset - 1
-    print(f"{i:>{widthLargestStart}}: {c:>{widthLargestCount}d} {n:>{widthLargestModifiedStart}d}")
+    # Switch to keeping track of a subset of previously seen values, to avoid memory overload
+    print(f"{i:>{widthLargestStart}} -> {n:>{widthLargestModifiedStart}d} ({len(nList):>6} steps before a short-circuit route was encountered: {lastElement})")
+    alreadySeen.add(n)
+    nListLen = len(nList)
+    if (nListLen >= 100):
+        decimateStepSize = (nListLen - (nListLen % 10)) // 10
+        for ii in range(0, nListLen, decimateStepSize):
+            a = nList[ii]
+            print(a)
+            alreadySeen.add(nList[ii])
     for ii in range(len(nList)):
         nn = nList[ii]
         alreadySeen.add(nn)
-        countMap[nn] = (c - ii)
 
