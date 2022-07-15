@@ -13,7 +13,8 @@ def collatz(n):
 def gen_collatz(n):
     nList = [n]
     isLoop = False
-    while ((n > 1) and not (n in alreadySeen)):
+    #while ((n > 1) and not (n in alreadySeen)):
+    while (n > 1):
         n = collatz(n)
         nList.append(n)
         if (nList.count(n) > 1):
@@ -22,11 +23,11 @@ def gen_collatz(n):
     return nList, isLoop
 
 def modifyStart(i):
-    return (2 ** i) + 1
+    return (2 ** i) - 1
     
 # Main method
 minI=1
-maxI=100
+maxI=30
 
 # Help to stop early when we've seen a degenerate case before
 alreadySeen = set()
@@ -41,6 +42,7 @@ widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 for i in range(minI, maxI):
     n = modifyStart(i)
     nList, isLoop = gen_collatz(n)
+
     if (isLoop):
         print("!! LOOP !!")
         print(f"  {n} -> {nList}")
@@ -56,7 +58,7 @@ for i in range(minI, maxI):
         decimateStepSize = (nListLen - (nListLen % 10)) // 10
         for ii in range(0, nListLen, decimateStepSize):
             a = nList[ii]
-            print(a)
+            #print(a)
             alreadySeen.add(nList[ii])
     for ii in range(len(nList)):
         nn = nList[ii]
