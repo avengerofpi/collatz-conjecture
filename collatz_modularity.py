@@ -68,7 +68,7 @@ def collatzModN(N, residueList):
 N = 2
 nLog2 = 1
 maxResidueListLenWidth=4
-residueList=range(N)
+residueList=[i for i in range(N) if (i % 2)]
 while residueList:
     print("-"*50)
     print(f"{len(residueList):>{maxResidueListLenWidth}d} residues to check          for N = {N}: {residueList}")
