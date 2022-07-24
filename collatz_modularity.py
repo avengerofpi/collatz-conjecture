@@ -28,7 +28,7 @@ def collatzModN(N, residueList):
     for A in residueList:
         a = A
         b = N
-        print(f"Checking a = {a:>{maxResidueWidth}d} = 0b{a:>{maxResidueWidthBinary}b} (mod {b:>{maxModulusWidth}d}) -> ", end="")
+        print(f"Checking a = {a:>{maxResidueWidth}d} = 0b{a:0>{maxResidueWidthBinary}b} ({b:>d}) -> ", end="")
         iters = 0
         maxIters = 30
         maxIters = 10
@@ -40,9 +40,15 @@ def collatzModN(N, residueList):
 
         # Report conclusions, checking each of the loop-exiting conditions
         if (b < N):
-            print(f"  Decreases       ((b={b:>{maxModulusWidth}d}) < (N={N}))")
+            if (a == A):
+                aCompare = "="
+            elif (a < A):
+                aCompare = "<"
+            else:
+                aCompare = ">"
+            print(f"  Decreases       ((a: {a}{aCompare}{A}) (b={b}<{N}))")
         elif ((b % 2) == 1):
-            print(f"  Needs splitting ((b={b:>{maxModulusWidth}d} is odd))")
+            print(f"  Needs splitting (0b{a:0>{maxResidueWidthBinary+4}b})")
             needsSplitting.append(A)
         elif (iters >= maxIters):
             print(f"  Needs more iters (current maxIters is {maxIters})")
