@@ -12,14 +12,16 @@ def collatz(n):
 
 def gen_collatz(n):
     nList = [n]
+    maxBitLen = n.bit_length()
     isLoop = False
     while (n > 1):
         n = collatz(n)
         nList.append(n)
+        maxBitLen = max(maxBitLen, n.bit_length())
         if (nList.count(n) > 1):
             isLoop = True
             break
-    return nList, isLoop
+    return nList, isLoop, maxBitLen
 
 def modifyStart(i):
     return (2 ** i) - 1
@@ -41,7 +43,7 @@ widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 iRange = range(minI, maxI + 1)
 for i in iRange:
     n = modifyStart(i)
-    nList, isLoop = gen_collatz(n)
+    nList, isLoop, maxBitLen = gen_collatz(n)
 
     if (isLoop):
         print("!! LOOP !!")
