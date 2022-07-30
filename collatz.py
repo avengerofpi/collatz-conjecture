@@ -2,6 +2,7 @@
 
 # Imports
 from math import log10
+import sqlite3
 
 # Functions
 def collatz(n):
@@ -10,22 +11,40 @@ def collatz(n):
     else:
         return n//2
 
-def gen_collatz(n):
-    nList = [n]
-    maxBitLen = n.bit_length()
+def gen_collatz(n, cursor):
+    start = n
+    startBitLen = n.bit_length()
+    startHash = hash(n)
+    try:
+        sql = "INSERT INTO PathDetails (start, startBitLen, hash) VALUES (?,?,?)"
+        sqlArgs = (start, startBitLen, startHash)
+        cursor.execute(sql, sqlArgs)
+    except sqlite3.IntegrityError as error:
+        print(f"  Looks like there is already an entry for n = {n} in the database. Gonna proceed anyways.", n)
+
     isLoop = False
+    maxValue = n
+    maxBitLen = startBitLen
+    nListLen = 1
     while (n > 1):
         n = collatz(n)
-        nList.append(n)
+        maxValue = max(maxValue, n)
         maxBitLen = max(maxBitLen, n.bit_length())
-        if (nList.count(n) > 1):
-            isLoop = True
-            break
-    return nList, isLoop, maxBitLen
+        nListLen += 1
+    try:
+        sql = "INSERT OR REPLACE INTO PathDetails (start, startBitLen, hash, pathLen, isLoop, largestValue, largestValueBitLen) VALUES (?,?,?,?,?,?,?)"
+        sqlArgs = (start, startBitLen, startHash, nListLen, isLoop, str(maxValue), maxBitLen)
+        print(f"Executing: {sql}\n  {sqlArgs}")
+        cursor.execute(sql, sqlArgs)
+    except OverflowError as error:
+        print(f"Error while processing n = {start}. Details: {error}")
+        print((start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen))
+        raise error
+    return nListLen, isLoop, maxBitLen
 
 def modifyStart(i):
     return (2 ** i) - 1
-    
+
 # Main method
 minI=1
 maxI=30
@@ -33,63 +52,26 @@ maxI=30
 # Help to stop early when we've seen a degenerate case before
 countMap = { 1: 1 }
 nToListMap = { 1: [] }
-nList_lengthList = list()
 
 # Printing-help vars
 widthLargestStart =         int(log10(maxI)) + 1
 widthLargestCount =         int(log10(maxI)) + 2
 widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
 
+conn = sqlite3.connect("data/collatz.db")
+cursor = conn.cursor()
 iRange = range(minI, maxI + 1)
 for i in iRange:
     n = modifyStart(i)
-    nList, isLoop, maxBitLen = gen_collatz(n)
+    nListLen, isLoop, maxBitLen = gen_collatz(n, cursor)
 
     if (isLoop):
         print("!! LOOP !!")
-        print(f"  {n} -> {nList}")
+        print(f"  {n} -> {nListLen}")
         break
 
-    lastElement = nList[-1]
-    print(f"{i:>{widthLargestStart}} -> {n:>{widthLargestModifiedStart}d} ({len(nList):>6} steps before a short-circuit route was encountered: {lastElement})")
-    nListLen = len(nList)
-    nList_lengthList.append(nListLen)
-
-# Graph
-# Scatterplot (see https://matplotlib.org/stable/plot_types/index
-# for a list of matplotlib plot types
-import matplotlib.pyplot as plt
-import numpy as np
-import inspect
-import re
-
-plt.style.use('_mpl-gallery')
-
-# make the data
-x = iRange
-y = nList_lengthList
-yFlattened = [ y[i] - x[i] for i in range(len(x))]
-print(f"x: {x}")
-print(f"y: {y}")
-# size and color:
-#sizes = np.random.uniform(15, 80, len(x))
-#colors = np.random.uniform(15, 80, len(x))
-plt.plot(x, y, 'b.')
-plt.plot(x, yFlattened, 'r.')
-
-plt.xlabel(f"Lengths of Collatz paths for {re.sub('.*return |def .*', '', inspect.getsource(modifyStart), re.DOTALL)}")
-
-plt.title(f"{inspect.getsource(modifyStart)}")
-plt.title('hello world', loc='center')
-plt.subplots_adjust(left=0.05, bottom=0.10, right=0.97, top=0.95, wspace=None, hspace=None)
-
-# plot
-#fig, ax = plt.subplots()
+conn.commit()
+conn.close()
 #
-#ax.scatter(x, y, s=sizes, c=colors, vmin=0, vmax=100)
 #
-#ax.set(xlim=(0, 8), xticks=np.arange(1, 8),
-#       ylim=(0, 8), yticks=np.arange(1, 8))
-
-plt.show()
 
