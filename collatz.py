@@ -3,6 +3,8 @@
 # Imports
 from math import log10
 import sqlite3
+import hashlib
+import sys
 
 # Functions
 def collatz(n):
@@ -24,9 +26,6 @@ def insertInitialDbEntry(start, startBitLen, startHash):
         print(f"  Looks like there is already an entry in the database for")
         print(f"    start value:       {start}")
         print(f"    Started from seed: {n}")
-        print("   Gonna proceed anyways.")
-        print(f"    In case it didn't complete in a previous run for this starting value.")
-        print(f"    I should add a check to see whether it looks completed.")
 
 def updateDbEntry(start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen):
     """
@@ -84,26 +83,30 @@ def gen_collatz(n, cursor):
         maxBitLen = max(maxBitLen, n.bit_length())
         nListLen += 1
     updateDbEntry(start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen)
+    conn.commit()
     return nListLen, isLoop, maxBitLen
 
 def modifyStart(i):
-    return (2 ** i) - 1
+    ret = (2 ** i) - 1
+    print(f"modifyStart: {i} -> {ret}")
+    return ret
+
+def md5hash(a):
+    f = hashlib.md5()
+    f.update(bytes(str(a), 'utf-8'))
+    ret = f.hexdigest()
+    print(f"md5hash:  {ret}")
+    return ret
 
 # Main method
 minI=1
 maxI=30
 
-# Help to stop early when we've seen a degenerate case before
-countMap = { 1: 1 }
-nToListMap = { 1: [] }
-
-# Printing-help vars
-widthLargestStart =         int(log10(maxI)) + 1
-widthLargestCount =         int(log10(maxI)) + 2
-widthLargestModifiedStart = int(log10(modifyStart(maxI))) + 1
-
+# SQL connection and query vars
 conn = sqlite3.connect("data/collatz.db")
 cursor = conn.cursor()
+
+# Main loop
 iRange = range(minI, maxI + 1)
 for i in iRange:
     n = modifyStart(i)
@@ -113,6 +116,9 @@ for i in iRange:
         print("!! LOOP !!")
         print(f"  {n} -> {nListLen}")
         break
+
+    print()
+    sys.stdout.flush()
 
 conn.commit()
 conn.close()
