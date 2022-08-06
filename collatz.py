@@ -38,10 +38,9 @@ def updateDbEntry(start, startBitLen, nPathLen, isLoop):
     Update an entry for a Collatz path with final, full path details.
     """
     try:
-        sql = """INSERT OR REPLACE INTO PathDetails (start, startBitLen, pathLen, isLoop)
-    VALUES (?,?,?,?)"""
-        sqlArgs = (str(start), startBitLen, nListLen, isLoop)
-        print(f"Executing: {sql}\n  values: {sqlArgs}")
+        sql = """INSERT OR REPLACE INTO PathDetails (start, startBitLen, pathLen, isLoop) VALUES (?,?,?,?)"""
+        sqlArgs = (str(start), startBitLen, nPathLen, isLoop)
+        print(f"Executing: {sql} | {sqlArgs}")
         cursor.execute(sql, sqlArgs)
     except OverflowError as error:
         print(f"Error while processing n = {start}. Details: {error}")
@@ -51,10 +50,10 @@ def updateDbEntry(start, startBitLen, nPathLen, isLoop):
 def checkForExistingDbEntry(start):
     sql = """SELECT count(*) FROM PathDetails WHERE start == (?)"""
     sqlArgs = (str(start),)
-    print(f"Executing: {sql}\n  values: {sqlArgs}")
+    print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     (numAlreadyExist,) = cursor.fetchone()
-    print(f"  Got: {numAlreadyExist}")
+    print(f" | Got: {numAlreadyExist}")
     return (numAlreadyExist > 0)
 
 def getExistingDbEntry(start):
@@ -63,21 +62,21 @@ def getExistingDbEntry(start):
 def getPathLen(start):
     sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
     sqlArgs = (str(start),)
-    print(f"Executing: {sql}\n  values: {sqlArgs}")
+    print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     ret = cursor.fetchone()
     (start, startBitLen, pathLen, isLoop,) = ret
-    print(f"  Got: {ret}")
+    print(f" | Got: {ret}")
     return pathLen
 
 def getShortcutDetails(n):
     sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
     sqlArgs = (str(n),)
-    print(f"Executing: {sql}\n  values: {sqlArgs}")
+    print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     ret = cursor.fetchone()
     (n, startBitLen, pathLen, isLoop,) = ret
-    print(f"  Got: {ret}")
+    print(f" | Got: {ret}")
     return pathLen, isLoop
 
 def gen_collatz(n, cursor):
@@ -130,8 +129,9 @@ def gen_collatz(n, cursor):
     updateDbEntry(start, startBitLen, nPathLen, isLoop)
     saveNewShortcutEntries(nPathLen, shortcutsToRemember, isLoop)
 
-    # Save latest changes
+    # Save latest changes to database
     conn.commit()
+
     return nPathLen, isLoop
 
 def saveNewShortcutEntries(nPathLen, shortcutsToRemember, isLoop):
@@ -171,6 +171,4 @@ for i in iRange:
 
 conn.commit()
 conn.close()
-#
-#
 
