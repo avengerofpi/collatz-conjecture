@@ -6,6 +6,12 @@ import sqlite3
 import hashlib
 import sys
 
+# Main parameters
+minI=1
+maxI=30
+iRange = range(minI, maxI + 1)
+databasePath = "data/collatz.02.db"
+
 # Functions
 def collatz(n):
     if (n % 2):
@@ -13,33 +19,33 @@ def collatz(n):
     else:
         return n//2
 
-def insertInitialDbEntry(start, startBitLen, startHash):
+def insertInitialDbEntry(start, startBitLen):
     """
     Insert initial entry for a Collatz path.
     """
     try:
-        sql = """INSERT INTO PathDetails (start, startBitLen, hash)
-    VALUES (?,?,?)"""
-        sqlArgs = (str(start), startBitLen, startHash)
+        sql = """INSERT INTO PathDetails (start, startBitLen)
+    VALUES (?,?)"""
+        sqlArgs = (str(start), startBitLen)
         cursor.execute(sql, sqlArgs)
     except sqlite3.IntegrityError as error:
         print(f"  Looks like there is already an entry in the database for")
         print(f"    start value:       {start}")
         print(f"    Started from seed: {n}")
 
-def updateDbEntry(start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen):
+def updateDbEntry(start, startBitLen, nPathLen, isLoop):
     """
     Update an entry for a Collatz path with final, full path details.
     """
     try:
-        sql = """INSERT OR REPLACE INTO PathDetails (start, startBitLen, hash, pathLen, isLoop, largestValue, largestValueBitLen)
-    VALUES (?,?,?,?,?,?,?)"""
-        sqlArgs = (str(start), startBitLen, startHash, nListLen, isLoop, str(maxValue), maxBitLen)
+        sql = """INSERT OR REPLACE INTO PathDetails (start, startBitLen, pathLen, isLoop)
+    VALUES (?,?,?,?)"""
+        sqlArgs = (str(start), startBitLen, nListLen, isLoop)
         print(f"Executing: {sql}\n  values: {sqlArgs}")
         cursor.execute(sql, sqlArgs)
     except OverflowError as error:
         print(f"Error while processing n = {start}. Details: {error}")
-        print((start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen))
+        print((start, startBitLen, nPathLen, isLoop))
         raise error
 
 def checkForExistingDbEntry(start):
@@ -52,39 +58,87 @@ def checkForExistingDbEntry(start):
     return (numAlreadyExist > 0)
 
 def getExistingDbEntry(start):
-    sql = """SELECT start, startBitLen, hash, pathLen, isLoop, largestValue, largestValueBitLen
-FROM PathDetails WHERE start == (?)"""
+    return getPathLen(start)
+
+def getPathLen(start):
+    sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
     sqlArgs = (str(start),)
     print(f"Executing: {sql}\n  values: {sqlArgs}")
     cursor.execute(sql, sqlArgs)
     ret = cursor.fetchone()
-    (start, startBitLen, startHash, pathLen, isLoop, largestValue, largestValueBitLen,) = ret
+    (start, startBitLen, pathLen, isLoop,) = ret
     print(f"  Got: {ret}")
-    return pathLen, isLoop, largestValueBitLen
+    return pathLen
+
+def getShortcutDetails(n):
+    sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
+    sqlArgs = (str(n),)
+    print(f"Executing: {sql}\n  values: {sqlArgs}")
+    cursor.execute(sql, sqlArgs)
+    ret = cursor.fetchone()
+    (n, startBitLen, pathLen, isLoop,) = ret
+    print(f"  Got: {ret}")
+    return pathLen, isLoop
 
 def gen_collatz(n, cursor):
+    # Use this modulus and this residue to flag intermediate
+    # value along Collatz paths that should be tracked, to help
+    # with short-circuiting future paths
+    shortcutModulus = 2 ** 10
+    shortcutResidue = 1
+
+    if checkForExistingDbEntry(n):
+        print("  Seen before, but continuing anyways")
+
     start = n
     startBitLen = n.bit_length()
-    startHash = f"{hash(n):016x}"
 
-    if checkForExistingDbEntry(start):
-        print("  Skipping")
-        return getExistingDbEntry(start)
+    insertInitialDbEntry(start, startBitLen)
 
-    insertInitialDbEntry(start, startBitLen, startHash)
+    # Max values seen since the last shortcut value
+    isLoop = None
+    nPathLen = 1
 
-    isLoop = False
-    maxValue = n
-    maxBitLen = startBitLen
-    nListLen = 1
+    nShortcut = n % shortcutModulus
+    shortcutsToRemember = list()
     while (n > 1):
         n = collatz(n)
-        maxValue = max(maxValue, n)
-        maxBitLen = max(maxBitLen, n.bit_length())
-        nListLen += 1
-    updateDbEntry(start, startBitLen, startHash, nListLen, isLoop, maxValue, maxBitLen)
+        nPathLen += 1
+
+        # Update and check the shortcut
+        nShortcut = n % shortcutModulus
+        if (n > shortcutResidue) and (nShortcut == shortcutResidue):
+            print(f"FOUND A SHORTCUT CANDIDATE: {n} = {nShortcut} (mod {shortcutModulus}) | at path step {nPathLen}")
+            # Check if this shortcut has been seen during this path.
+            # If yes, we have a loop!
+            if (n in shortcutsToRemember):
+                isLoop = True
+
+            # See if the current value of n has been seen before.
+            # If yes, use the details from that saved value and
+            # update the list of save nShortcut values.
+            # If not, save this value of nShortcut to a list
+            # for later insertion.
+            if checkForExistingDbEntry(n):
+                shortcutPathLen, shortcutIsLoop = getShortcutDetails(n)
+                nPathLen += (shortcutPathLen - 1)
+                isLoop = shortcutIsLoop
+                break
+            else:
+                shortcutsToRemember.append((n, -(nPathLen - 1),))
+
+    updateDbEntry(start, startBitLen, nPathLen, isLoop)
+    saveNewShortcutEntries(nPathLen, shortcutsToRemember, isLoop)
+
+    # Save latest changes
     conn.commit()
-    return nListLen, isLoop, maxBitLen
+    return nPathLen, isLoop
+
+def saveNewShortcutEntries(nPathLen, shortcutsToRemember, isLoop):
+    for (nShortcut, nShortcutPathLenAdjust,) in shortcutsToRemember:
+        shortcutPathLen = nPathLen + nShortcutPathLenAdjust
+        print(f"Shortcut add: {nShortcut} | pathLen adjustment {nShortcutPathLenAdjust} | pathLen {shortcutPathLen}")
+        updateDbEntry(nShortcut, nShortcut.bit_length(), shortcutPathLen, isLoop)
 
 def modifyStart(i):
     ret = (2 ** i) - 1
@@ -98,23 +152,18 @@ def md5hash(a):
     print(f"md5hash:  {ret}")
     return ret
 
-# Main method
-minI=1
-maxI=30
-
 # SQL connection and query vars
-conn = sqlite3.connect("data/collatz.db")
+conn = sqlite3.connect(databasePath)
 cursor = conn.cursor()
 
-# Main loop
-iRange = range(minI, maxI + 1)
+# Main method
 for i in iRange:
     n = modifyStart(i)
-    nListLen, isLoop, maxBitLen = gen_collatz(n, cursor)
+    nPathLen, isLoop = gen_collatz(n, cursor)
 
     if (isLoop):
         print("!! LOOP !!")
-        print(f"  {n} -> {nListLen}")
+        print(f"  {n} -> {nPathLen}")
         break
 
     print()
