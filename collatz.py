@@ -2,15 +2,22 @@
 
 # Imports
 from math import log10
+from enum import Enum
 import sqlite3
 import hashlib
 import sys
 
 # Main parameters
 minI=1
-maxI=30
+maxI=300
 iRange = range(minI, maxI + 1)
-databasePath = "data/collatz.02.db"
+databasePath = "data/collatz.03.db"
+shortcutModulus = 2 ** 10
+shortcutResidue = 1
+
+class TableNames(Enum):
+    PathDetails = "PathDetails"
+    ShortcutDetails = "ShortcutDetails"
 
 # Functions
 def collatz(n):
@@ -24,7 +31,7 @@ def insertInitialDbEntry(start, startBitLen):
     Insert initial entry for a Collatz path.
     """
     try:
-        sql = """INSERT INTO PathDetails (start, startBitLen)
+        sql = f"""INSERT INTO {TableNames.PathDetails.value} (start, startBitLen)
     VALUES (?,?)"""
         sqlArgs = (str(start), startBitLen)
         cursor.execute(sql, sqlArgs)
@@ -38,7 +45,7 @@ def updateDbEntry(start, startBitLen, nPathLen, isLoop):
     Update an entry for a Collatz path with final, full path details.
     """
     try:
-        sql = """INSERT OR REPLACE INTO PathDetails (start, startBitLen, pathLen, isLoop) VALUES (?,?,?,?)"""
+        sql = f"""INSERT OR REPLACE INTO {TableNames.PathDetails.value} (start, startBitLen, pathLen, isLoop) VALUES (?,?,?,?)"""
         sqlArgs = (str(start), startBitLen, nPathLen, isLoop)
         print(f"Executing: {sql} | {sqlArgs}")
         cursor.execute(sql, sqlArgs)
@@ -47,20 +54,28 @@ def updateDbEntry(start, startBitLen, nPathLen, isLoop):
         print((start, startBitLen, nPathLen, isLoop))
         raise error
 
-def checkForExistingDbEntry(start):
-    sql = """SELECT count(*) FROM PathDetails WHERE start == (?)"""
+def checkForExistingEntry(start, tableName):
+    if (type(tableName) != TableNames):
+        raise TypeError(f"Input argument 'tableName' should be of type 'TableNames' but was of type {type(tableName)}, with value {tableName}")
+    sql = f"""SELECT count(*) FROM {tableName.value} WHERE start == (?)"""
     sqlArgs = (str(start),)
-    print(f"Executing: {sql} | {sqlArgs}", end="")
+    print(f"Executing: {sql} | {sqlArgs} ", end="")
     cursor.execute(sql, sqlArgs)
     (numAlreadyExist,) = cursor.fetchone()
-    print(f" | Got: {numAlreadyExist}")
+    print(f"| Got: {numAlreadyExist}")
     return (numAlreadyExist > 0)
+
+def checkForExistingStartEntry(start):
+    return checkForExistingEntry(start, TableNames.PathDetails)
+
+def checkForExistingShortcutEntry(start):
+    return checkForExistingEntry(start, TableNames.ShortcutDetails)
 
 def getExistingDbEntry(start):
     return getPathLen(start)
 
 def getPathLen(start):
-    sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
+    sql = f"""SELECT start, startBitLen, pathLen, isLoop FROM {TableNames.PathDetails.value} WHERE start == (?)"""
     sqlArgs = (str(start),)
     print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
@@ -70,7 +85,7 @@ def getPathLen(start):
     return pathLen
 
 def getShortcutDetails(n):
-    sql = """SELECT start, startBitLen, pathLen, isLoop FROM PathDetails WHERE start == (?)"""
+    sql = f"""SELECT start, startBitLen, pathLen, isLoop FROM {ShortcutDetails.value} WHERE start == (?)"""
     sqlArgs = (str(n),)
     print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
@@ -83,16 +98,14 @@ def gen_collatz(n, cursor):
     # Use this modulus and this residue to flag intermediate
     # value along Collatz paths that should be tracked, to help
     # with short-circuiting future paths
-    shortcutModulus = 2 ** 10
-    shortcutResidue = 1
 
-    if checkForExistingDbEntry(n):
+    if checkForExistingStartEntry(n):
         print("  Seen before, but continuing anyways")
 
     start = n
     startBitLen = n.bit_length()
 
-    insertInitialDbEntry(start, startBitLen)
+    #insertInitialDbEntry(start, startBitLen)
 
     # Max values seen since the last shortcut value
     isLoop = None
@@ -118,7 +131,7 @@ def gen_collatz(n, cursor):
             # update the list of save nShortcut values.
             # If not, save this value of nShortcut to a list
             # for later insertion.
-            if checkForExistingDbEntry(n):
+            if checkForExistingShortcutEntry(n):
                 shortcutPathLen, shortcutIsLoop = getShortcutDetails(n)
                 nPathLen += (shortcutPathLen - 1)
                 isLoop = shortcutIsLoop

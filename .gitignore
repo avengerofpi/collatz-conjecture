@@ -1,4 +1,7 @@
-data/collatz.db
-data/collatz.02.db
+data/collatz.01.db*
+data/collatz.02.db*
+data/collatz.03.db*
+output*.txt*
 *~
 *.swp
+.collatz*sw[a-z]
