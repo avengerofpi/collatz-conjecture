@@ -1,10 +1,8 @@
 #!/usr/bin/python3
 
 # Imports
-from math import log10
 from enum import Enum
 import sqlite3
-import hashlib
 import sys
 
 # Main parameters
@@ -107,7 +105,7 @@ def gen_collatz(n, cursor):
 
     #insertInitialDbEntry(start, startBitLen)
 
-    # Max values seen since the last shortcut value
+    # Initial values of some loop vars
     isLoop = None
     nPathLen = 1
 
@@ -156,13 +154,6 @@ def saveNewShortcutEntries(nPathLen, shortcutsToRemember, isLoop):
 def modifyStart(i):
     ret = (2 ** i) - 1
     print(f"modifyStart: {i} -> {ret}")
-    return ret
-
-def md5hash(a):
-    f = hashlib.md5()
-    f.update(bytes(str(a), 'utf-8'))
-    ret = f.hexdigest()
-    print(f"md5hash:  {ret}")
     return ret
 
 # SQL connection and query vars
