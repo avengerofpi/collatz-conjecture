@@ -3,7 +3,8 @@
 set -eu
 
 batchSize=100;
-for iStart in {0..2}; do
+numBatches=5;
+for iStart in $(seq 0 $((numBatches - 1))); do
   batchStart=$((${iStart} * ${batchSize}));
   batchEnd=$(((${iStart} + 1) * ${batchSize}));
   startValues="$(python3 -c "print(tuple(2 ** i -1 for i in range( ${batchStart}, ${batchEnd} + 1 )))")"
