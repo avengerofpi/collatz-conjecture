@@ -7,13 +7,17 @@ import sqlite3
 import sys
 
 # Main parameters
-minI=1
-maxI=300
-iRange = range(minI, maxI + 1)
-databasePath = "data/collatz.03.db"
+#minI=83112
+#maxI=100000
+#iRange = range(minI, maxI + 1)
+numIters=10
+iRange = range(numIters)
+initialStart = 3
+databasePath = "data/collatz.04.db
 shortcutModulus = 2 ** 10
 shortcutResidue = 1
 repeatAlreadySeenStarts = False
+shortcutMinStepsTillNextShortcut = 10 ** 5
 
 # Helper class to enforce table names
 # (poor-quality attempt to avoid SQL injection attack)
@@ -35,9 +39,9 @@ def updateDbEntry(start, startBitLen, calcTime, nPathLen, isLoop, tableName = Ta
     if (type(tableName) != TableNames):
         raise TypeError(f"Input argument 'tableName' should be of type 'TableNames' but was of type {type(tableName)}, with value {tableName}")
     try:
-        sql = f"""INSERT OR REPLACE INTO {tableName.value} (start, startBitLen, calcTime, pathLen, isLoop) VALUES (?,?,?,?,?)"""
-        sqlArgs = (str(start), startBitLen, calcTime, nPathLen, isLoop)
-        print(f"Executing: {sql} | {sqlArgs}")
+        sql = f"""INSERT OR REPLACE INTO {tableName.value} (startBitLen, calcTime, pathLen, isLoop, start) VALUES (?,?,?,?,?)"""
+        sqlArgs = (startBitLen, calcTime, nPathLen, isLoop, str(start))
+        print(f"Executing: {sql} | {sqlArgs[0:-1]}")
         cursor.execute(sql, sqlArgs)
     except OverflowError as error:
         print(f"Error while processing n = {start}. Details: {error}")
@@ -46,7 +50,7 @@ def updateDbEntry(start, startBitLen, calcTime, nPathLen, isLoop, tableName = Ta
 
 def updateShortcutEntry(start, startBitLen, calcTime, nPathLen, isLoop):
     """
-    Set a shortcut entry for a Collatz path with full path details.
+    Update an entry for a Collatz path with final, full path details.
     """
     updateDbEntry(start, startBitLen, calcTime, nPathLen, isLoop, tableName = TableNames.ShortcutDetails)
 
@@ -55,10 +59,10 @@ def checkForExistingEntry(start, tableName):
         raise TypeError(f"Input argument 'tableName' should be of type 'TableNames' but was of type {type(tableName)}, with value {tableName}")
     sql = f"""SELECT count(*) FROM {tableName.value} WHERE start == (?)"""
     sqlArgs = (str(start),)
-    print(f"Executing: {sql} | {sqlArgs} ", end="")
+    #print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     (numAlreadyExist,) = cursor.fetchone()
-    print(f"| Got: {numAlreadyExist}")
+    #print(f" | Got: {numAlreadyExist}")
     return (numAlreadyExist > 0)
 
 def checkForExistingStartEntry(start):
@@ -67,30 +71,17 @@ def checkForExistingStartEntry(start):
 def checkForExistingShortcutEntry(start):
     return checkForExistingEntry(start, TableNames.ShortcutDetails)
 
-def getExistingDbEntry(start):
-    return getPathLen(start)
-
-def getPathLen(start):
-    sql = f"""SELECT start, startBitLen, pathLen, isLoop FROM {TableNames.PathDetails.value} WHERE start == (?)"""
-    sqlArgs = (str(start),)
-    print(f"Executing: {sql} | {sqlArgs}", end="")
-    cursor.execute(sql, sqlArgs)
-    ret = cursor.fetchone()
-    (start, startBitLen, pathLen, isLoop,) = ret
-    print(f" | Got: {ret}")
-    return pathLen
-
 def getShortcutDetails(n):
     sql = f"""SELECT start, startBitLen, pathLen, calcTime, isLoop FROM {TableNames.ShortcutDetails.value} WHERE start == (?)"""
     sqlArgs = (str(n),)
-    print(f"Executing: {sql} | {sqlArgs}", end="")
+    #print(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     ret = cursor.fetchone()
     (n, startBitLen, pathLen, calcTime, isLoop,) = ret
-    print(f" | Got: {ret}")
+    #print(f" | Got: {ret}")
     return pathLen, calcTime, isLoop
 
-def gen_collatz(n, cursor):
+def gen_collatz(n):
     # Use this modulus and this residue to flag intermediate
     # value along Collatz paths that should be tracked, to help
     # with short-circuiting future paths
@@ -119,7 +110,7 @@ def gen_collatz(n, cursor):
         nShortcut = n % shortcutModulus
         shortcutCalcTime = 0
         if (n > shortcutResidue) and (nShortcut == shortcutResidue):
-            print(f"FOUND A SHORTCUT CANDIDATE: {n} = {nShortcut} (mod {shortcutModulus}) | at path step {nPathLen}")
+            print(f"FOUND A SHORTCUT CANDIDATE at path step {nPathLen} | {nShortcut} (mod {shortcutModulus})")
             # Check if this shortcut has been seen during this path.
             # If yes, we have a loop!
             if (n in shortcutsToRemember):
@@ -136,9 +127,16 @@ def gen_collatz(n, cursor):
                 isLoop = shortcutIsLoop
                 break
             else:
-                shortcutPathLenAdjustment = -(nPathLen - 1)
-                shortcutCalcTime = getTimeInMillis()
-                shortcutsToRemember.append((n, shortcutPathLenAdjustment, shortcutCalcTime))
+                # Only append a new shortcut if it is the first shortcut or is at least
+                # shortcutMinStepsTillNextShortcut steps after the previous shorcut.
+                appendShortcut = True
+                if (len(shortcutsToRemember) != 0):
+                    prevShortcut, prevShortcutPathLenAdjustment, prevShortcutCalcTime = shortcutsToRemember[-1]
+                    appendShortcut = ((nPathLen + prevShortcutPathLenAdjustment) > shortcutMinStepsTillNextShortcut)
+                if appendShortcut:
+                    shortcutPathLenAdjustment = -(nPathLen - 1)
+                    shortcutCalcTime = getTimeInMillis()
+                    shortcutsToRemember.append((n, shortcutPathLenAdjustment, shortcutCalcTime))
 
     # Get end time
     endTime = getTimeInMillis()
@@ -158,7 +156,7 @@ def saveNewShortcutEntries(nPathLen, endTime, shortcutsToRemember, isLoop):
     for (nShortcut, nShortcutPathLenAdjust, nShortcutCalcTime) in shortcutsToRemember:
         shortcutPathLen = nPathLen + nShortcutPathLenAdjust
         shortcutCalcTime = endTime - nShortcutCalcTime
-        print(f"Shortcut add: {nShortcut} | pathLen adjustment {nShortcutPathLenAdjust} | pathLen {shortcutPathLen} | shortcutCalcTime {shortcutCalcTime}")
+        print(f"Shortcut add | pathLen adjustment {nShortcutPathLenAdjust} | calcTime to encounter this shortcut {nShortcutCalcTime} | shortcutCalcTime {shortcutCalcTime} | pathLen {shortcutPathLen} |  {nShortcut}")
         updateShortcutEntry(nShortcut, nShortcut.bit_length(), shortcutCalcTime, shortcutPathLen, isLoop)
 
 def modifyStart(i):
@@ -175,15 +173,17 @@ conn = sqlite3.connect(databasePath)
 cursor = conn.cursor()
 
 # Main loop
+n = initialStart
 for i in iRange:
-    n = modifyStart(i)
-    nPathLen, isLoop = gen_collatz(n, cursor)
+    #n = modifyStart(i)
+    nPathLen, isLoop = gen_collatz(n)
 
     if (isLoop):
         print("!! LOOP !!")
         print(f"  {n} -> {nPathLen}")
         break
 
+    n = n + (1 << (n.bit_length() + nPathLen - 1))
     print()
     sys.stdout.flush()
 
