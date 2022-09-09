@@ -2,7 +2,7 @@
 
 # Imports
 from enum import Enum
-from time import time
+import time
 import sqlite3
 import sys
 
@@ -12,15 +12,16 @@ import sys
 #iRange = range(minI, maxI + 1)
 numIters=15
 iRange = range(1, numIters + 1)
-initialStart = 0b1001011
+initialStart = 0b10001001011
 START_BIT_LEN_UPPER_BOUND = 10 ** 10
-PRINT_STATUS_UDPATE_RATE = 10 ** 6
-SAVE_T0_DATABASE=True
-databasePath = "data/collatz.07.db"
-SHORTCUT_MODULUS = 2 ** 100
+PRINT_STATUS_UDPATE_RATE = 10 ** 5
+SHORTCUT_MODULUS = 2 ** 16
 SHORTCUT_RESIDUE = SHORTCUT_MODULUS - 1
 shortcutMinStepsTillNextShortcut = 10 ** 1
 repeatAlreadySeenStarts = True
+
+databasePath = "data/collatz.08.db"
+SAVE_T0_DATABASE=True
 
 # Helper class to enforce table names
 # (poor-quality attempt to avoid SQL injection attack)
@@ -39,6 +40,13 @@ def modifyStart(i):
     ret = i
     return ret
 
+def logLine():
+    log("")
+
+def log(value, sep=' ', end= '\n', file=sys.stdout, flush=True):
+    formattedTime = time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
+    print(f"{formattedTime} INFO {value}", sep=sep, end=end, file=file, flush=flush)
+
 def insertOrUpdateDbEntries(valuesList, tableName = TableNames.PathDetails):
     """
     Update an entry for a Collatz path with final, full path details.
@@ -47,19 +55,16 @@ def insertOrUpdateDbEntries(valuesList, tableName = TableNames.PathDetails):
         raise TypeError(f"Input argument 'tableName' should be of type 'TableNames' but was of type {type(tableName)}, with value {tableName}")
     try:
         sql = f"""INSERT OR REPLACE INTO {tableName.value} (startBitLen, calcTime, pathLen, isLoop, start) VALUES (?,?,?,?,?)"""
-        print(f"Executing: {sql}")
-        sys.stdout.flush()
+        log(f"Executing: {sql}")
         for values in valuesList:
-            print(f"  {values[0:-1]}")
-            sys.stdout.flush()
+            log(f"  {values[0:-1]}")
         if SAVE_T0_DATABASE:
             cursor.executemany(sql, valuesList)
         else:
-            print(f"  skipping - NOT SAVING TO DB")
+            log(f"  skipping - NOT SAVING TO DB")
     except OverflowError as error:
-        print(f"Error while processing n = {start}. Details: {error}")
-        print((start, startBitLen, nPathLen, isLoop))
-        sys.stdout.flush()
+        log(f"Error while processing n = {start}. Details: {error}")
+        log((start, startBitLen, nPathLen, isLoop))
         raise error
 
 def updateDbEntry(start, startBitLen, calcTime, nPathLen, isLoop, tableName = TableNames.PathDetails):
@@ -71,17 +76,14 @@ def updateDbEntry(start, startBitLen, calcTime, nPathLen, isLoop, tableName = Ta
     try:
         sql = f"""INSERT OR REPLACE INTO {tableName.value} (startBitLen, calcTime, pathLen, isLoop, start) VALUES (?,?,?,?,?)"""
         sqlArgs = (startBitLen, calcTime, nPathLen, isLoop, str(start))
-        print(f"Executing: {sql} | {sqlArgs[0:-1]}")
-        sys.stdout.flush()
+        log(f"Executing: {sql} | {sqlArgs[0:-1]}")
         if SAVE_T0_DATABASE:
             cursor.execute(sql, sqlArgs)
-            sys.stdout.flush()
         else:
-            print(f"  skipping - NOT SAVING TO DB")
+            log(f"  skipping - NOT SAVING TO DB")
     except OverflowError as error:
-        print(f"Error while processing n = {start}. Details: {error}")
-        print((start, startBitLen, nPathLen, isLoop))
-        sys.stdout.flush()
+        log(f"Error while processing n = {start}. Details: {error}")
+        log((start, startBitLen, nPathLen, isLoop))
         raise error
 
 def updateShortcutEntry(start, startBitLen, calcTime, nPathLen, isLoop):
@@ -95,10 +97,10 @@ def checkForExistingEntry(start, tableName):
         raise TypeError(f"Input argument 'tableName' should be of type 'TableNames' but was of type {type(tableName)}, with value {tableName}")
     sql = f"""SELECT count(*) FROM {tableName.value} WHERE start == (?)"""
     sqlArgs = (str(start),)
-    #print(f"Executing: {sql} | {sqlArgs}", end="")
+    #log(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     (numAlreadyExist,) = cursor.fetchone()
-    #print(f" | Got: {numAlreadyExist}")
+    #log(f" | Got: {numAlreadyExist}")
     return (numAlreadyExist > 0)
 
 def checkForExistingStartEntry(start):
@@ -110,11 +112,11 @@ def checkForExistingShortcutEntry(start):
 def getShortcutDetails(n):
     sql = f"""SELECT start, startBitLen, pathLen, calcTime, isLoop FROM {TableNames.ShortcutDetails.value} WHERE start == (?)"""
     sqlArgs = (str(n),)
-    #print(f"Executing: {sql} | {sqlArgs}", end="")
+    #log(f"Executing: {sql} | {sqlArgs}", end="")
     cursor.execute(sql, sqlArgs)
     ret = cursor.fetchone()
     (n, startBitLen, pathLen, calcTime, isLoop,) = ret
-    #print(f" | Got: {ret}")
+    #log(f" | Got: {ret}")
     return pathLen, calcTime, isLoop
 
 def gen_collatz(n):
@@ -129,8 +131,7 @@ def gen_collatz(n):
     startTime = getTimeInMillis()
     isLoop = None
     nPathLen = 1
-    print(f"Starting new collatz orbit | bit_len = {startBitLen} | start = {start}")
-    sys.stdout.flush()
+    log(f"Starting new collatz orbit | bit_len = {startBitLen} | start = {start}")
 
     shortcutsToRemember = list()
     shortcutCalcTime = 0
@@ -138,7 +139,7 @@ def gen_collatz(n):
         n = collatz(n)
         nPathLen += 1
         if (nPathLen % PRINT_STATUS_UDPATE_RATE == 0):
-            print(f"  completed step # {nPathLen}")
+            log(f"  step # {nPathLen} | bit_len = {n.bit_length()} | current value = {n}")
         if (n in shortcutsToRemember):
             isLoop = True
             break
@@ -168,23 +169,23 @@ def gen_collatz(n):
     # Save latest changes to database
     conn.commit()
 
-    return nPathLen, isLoop
+    return n, nPathLen, isLoop
 
 def saveNewShortcutEntries(nPathLen, endTime, shortcutsToRemember, isLoop):
     if len(shortcutsToRemember) == 0:
         return
     valuesList = []
+    #log(f"shortcutsToRemember: {shortcutsToRemember}")
     for (nShortcut, nShortcutPathLenAdjust, nShortcutCalcTime) in shortcutsToRemember:
         shortcutPathLen = nPathLen + nShortcutPathLenAdjust
         shortcutCalcTime = endTime - nShortcutCalcTime
-        print(f"Shortcut add | pathLen adjustment {nShortcutPathLenAdjust} | calcTime to encounter this shortcut {nShortcutCalcTime} | shortcutCalcTime {shortcutCalcTime} | pathLen {shortcutPathLen} | {nShortcut}")
-        sys.stdout.flush()
+        log(f"Shortcut add | pathLen adjustment {nShortcutPathLenAdjust} | calcTime to encounter this shortcut {nShortcutCalcTime} | shortcutCalcTime {shortcutCalcTime} | pathLen {shortcutPathLen} | {nShortcut}")
         values = (nShortcut.bit_length(), shortcutCalcTime, shortcutPathLen, isLoop, str(nShortcut))
         valuesList.append(values)
     insertOrUpdateDbEntries(valuesList, TableNames.ShortcutDetails)
 
 def getTimeInMillis():
-    return int(time() * 1000)
+    return int(time.time() * 1000)
 
 # Main method
 # SQL connection and query vars - open
@@ -195,22 +196,23 @@ cursor = conn.cursor()
 n = initialStart
 for i in iRange:
     #n = modifyStart(i)
-    nPathLen, isLoop = gen_collatz(n)
+    start = n
+    nFinal, nPathLen, isLoop = gen_collatz(n)
+    log(f"  step # {nPathLen} | bit_len = {nFinal.bit_length()} | value = {nFinal}")
 
     if (isLoop):
-        print("!! LOOP !!")
-        print(f"  {n} -> {nPathLen}")
-        sys.stdout.flush()
+        log("!! LOOP !!")
+        log(f"  {nPathLen} -> {start}")
         break
 
+    #n = n + (1 << (nPathLen - n.bit_length() - 1))
     n = n + (1 << (nPathLen - n.bit_length()))
     if n.bit_length() > START_BIT_LEN_UPPER_BOUND:
-        print(f"""The next start value has {n.bit_length()} bits.
+        log(f"""The next start value has {n.bit_length()} bits.
 This exceeds the allowed upper bound of {START_BIT_LEN_UPPER_BOUND} bits.
 So we are stopping this execution""")
         break
-    print()
-    sys.stdout.flush()
+    logLine()
 
 # SQL connection and query vars - close
 conn.commit()
